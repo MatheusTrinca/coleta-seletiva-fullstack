@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import './styles.css';
 import { FiArrowLeft } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
 import logo from '../../assets/logo.svg';
 import { Map, TileLayer, Marker } from 'react-leaflet';
 import api from '../../services/api';
+import { LeafletMouseEvent } from 'leaflet';
 
 interface Item {
   id: number;
@@ -14,7 +15,19 @@ interface Item {
 
 const CreateLocation: React.FC = () => {
   const [items, setItems] = useState<Item[]>([]);
-  const [selected, setSelected] = useState(0);
+  const [selectedMapPosition, setSelectedMapPosition] = useState<
+    [number, number]
+  >([0, 0]);
+
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    whatsapp: '',
+    city: '',
+    uf: '',
+  });
+
+  const [selectedItems, setSelectedItems] = useState<number[]>([]);
 
   useEffect(() => {
     const getItems = async () => {
@@ -24,8 +37,48 @@ const CreateLocation: React.FC = () => {
     getItems();
   }, []);
 
-  const handleSubmit = () => {};
-  const handleInputChange = () => {};
+  function handleMapClick(event: LeafletMouseEvent): void {
+    setSelectedMapPosition([event.latlng.lat, event.latlng.lng]);
+  }
+
+  function handleInputChange(event: ChangeEvent<HTMLInputElement>) {
+    setFormData(oldData => {
+      return {
+        ...oldData,
+        [event.target.name]: event.target.value,
+      };
+    });
+  }
+
+  function handleSelectedItem(id: number) {
+    const found = selectedItems.includes(id);
+    if (found) {
+      return setSelectedItems(oldItems => {
+        return oldItems.filter(item => item !== id);
+      });
+    }
+    return setSelectedItems([...selectedItems, id]);
+  }
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    const { name, email, whatsapp, city, uf } = formData;
+    const [latitude, longitude] = selectedMapPosition;
+    const items = selectedItems.join(',');
+
+    const data = {
+      name,
+      email,
+      whatsapp,
+      city,
+      uf,
+      latitude,
+      longitude,
+      items,
+    };
+
+    await api.post('/locations', data);
+  }
 
   return (
     <div id="page-create-location">
@@ -84,12 +137,18 @@ const CreateLocation: React.FC = () => {
               <h2>Endereço</h2>
               <span>Marque o endereço no mapa</span>
             </legend>
-            <Map center={[-23.0003709, -43.365895]} zoom={14}>
+            <Map
+              center={[-23.0003709, -43.365895]}
+              zoom={14}
+              onclick={handleMapClick}
+            >
               <TileLayer
                 attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              <Marker position={[-23.0003709, -43.365895]} />
+              <Marker
+                position={[selectedMapPosition[0], selectedMapPosition[1]]}
+              />
             </Map>
             <div className="field-group">
               <div className="field">
@@ -122,8 +181,10 @@ const CreateLocation: React.FC = () => {
               {items.map((item, index) => (
                 <li
                   key={item.id}
-                  onClick={() => setSelected(index)}
-                  className={`${index === selected && 'selected'}`}
+                  onClick={() => handleSelectedItem(item.id)}
+                  className={`${
+                    selectedItems.includes(item.id) ? 'selected' : ''
+                  }`}
                 >
                   <img src={item.image_url} alt={item.title} />
                 </li>
