@@ -1,11 +1,18 @@
-import React, { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import React, {
+  ChangeEvent,
+  FormEvent,
+  useEffect,
+  useState,
+  useCallback,
+} from 'react';
 import './styles.css';
 import { FiArrowLeft } from 'react-icons/fi';
-import { Link } from 'react-router-dom';
+import { Link, useHistory } from 'react-router-dom';
 import logo from '../../assets/logo.svg';
 import { Map, TileLayer, Marker } from 'react-leaflet';
 import api from '../../services/api';
 import { LeafletMouseEvent } from 'leaflet';
+import Dropzone from '../../components/Dropzone';
 
 interface Item {
   id: number;
@@ -29,6 +36,10 @@ const CreateLocation: React.FC = () => {
 
   const [selectedItems, setSelectedItems] = useState<number[]>([]);
 
+  const [selectedFile, setSelectedFile] = useState<File>();
+
+  const history = useHistory();
+
   useEffect(() => {
     const getItems = async () => {
       const response = await api.get('items');
@@ -37,48 +48,59 @@ const CreateLocation: React.FC = () => {
     getItems();
   }, []);
 
-  function handleMapClick(event: LeafletMouseEvent): void {
+  const handleMapClick = useCallback((event: LeafletMouseEvent): void => {
     setSelectedMapPosition([event.latlng.lat, event.latlng.lng]);
-  }
+  }, []);
 
-  function handleInputChange(event: ChangeEvent<HTMLInputElement>) {
-    setFormData(oldData => {
-      return {
-        ...oldData,
-        [event.target.name]: event.target.value,
-      };
-    });
-  }
-
-  function handleSelectedItem(id: number) {
-    const found = selectedItems.includes(id);
-    if (found) {
-      return setSelectedItems(oldItems => {
-        return oldItems.filter(item => item !== id);
+  const handleInputChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setFormData(oldData => {
+        return {
+          ...oldData,
+          [event.target.name]: event.target.value,
+        };
       });
-    }
-    return setSelectedItems([...selectedItems, id]);
-  }
+    },
+    []
+  );
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    const { name, email, whatsapp, city, uf } = formData;
-    const [latitude, longitude] = selectedMapPosition;
-    const items = selectedItems.join(',');
+  const handleSelectedItem = useCallback(
+    (id: number) => {
+      const found = selectedItems.includes(id);
+      if (found) {
+        return setSelectedItems(oldItems => {
+          return oldItems.filter(item => item !== id);
+        });
+      }
+      return setSelectedItems([...selectedItems, id]);
+    },
+    [selectedItems]
+  );
 
-    const data = {
-      name,
-      email,
-      whatsapp,
-      city,
-      uf,
-      latitude,
-      longitude,
-      items,
-    };
+  const handleSubmit = useCallback(
+    async (event: FormEvent) => {
+      event.preventDefault();
+      const { name, email, whatsapp, city, uf } = formData;
+      const [latitude, longitude] = selectedMapPosition;
+      const items = selectedItems.join(',');
 
-    await api.post('/locations', data);
-  }
+      const data = new FormData();
+      data.append('name', name);
+      data.append('email', email);
+      data.append('whatsapp', whatsapp);
+      data.append('city', city);
+      data.append('uf', uf);
+      data.append('latitude', String(latitude));
+      data.append('longitude', String(longitude));
+      data.append('items', items);
+      selectedFile && data.append('image', selectedFile);
+
+      await api.post('/locations', data);
+      alert('Local cadastrado com sucesso');
+      history.push('/');
+    },
+    [formData, selectedMapPosition, selectedItems, history, selectedFile]
+  );
 
   return (
     <div id="page-create-location">
@@ -100,6 +122,8 @@ const CreateLocation: React.FC = () => {
             <legend>
               <h2>Dados</h2>
             </legend>
+
+            <Dropzone onFileUploaded={setSelectedFile} />
 
             <div className="field">
               <label htmlFor="name">Nome da entidade</label>
